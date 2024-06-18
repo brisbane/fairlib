@@ -10,6 +10,9 @@ from .Adult import AdultDataset
 from .COMPAS import COMPASDataset
 from .imSitu import imSituDataset
 from .ColoredMNIST import MNISTDataset
+from .bffhq import bffhqDataset
+from .celeba import celebaDataset
+from .celebMHQ import celebMHQDataset
 
 
 if sys.platform == "win32":
@@ -29,15 +32,23 @@ if sys.platform == "win32":
         COMPAS_race= data_dir + r'\compas',
         imSitu = data_dir + r'\imsitu',
         MNIST = data_dir + r'\coloredmnist',
+        bffhq = data_dir + r'\bffhq',
+        celeba = data_dir + r'\celeba',
     )
 else:
-    data_dir = r'.\data'
+    data_dir = './data'
     default_dataset_roots = dict(
         Moji= data_dir + '/deepmoji/split2/',
         Bios_gender= data_dir + '/bios_gender_economy',
         Bios_economy= data_dir + '/bios_gender_economy',
         Bios_both= data_dir + '/bios_gender_economy',
         FCL_Bios= data_dir + '/bios_gender_economy',
+        MNIST = data_dir + '/coloredmnist',
+        bffhq = data_dir + '/bffhq',
+        celeba = data_dir + '/celeba',
+        celeba_bm = data_dir + '/celeba_bm',
+        COMPAS_race= data_dir + '/compas',
+        adult = data_dir + '/adult',
     )
 
 
@@ -53,12 +64,17 @@ loader_map = {
     "compas":COMPASDataset,
     "imsitu":imSituDataset,
     "mnist":MNISTDataset,
+    "bffhq":bffhqDataset,
+    "celeba":celebaDataset,
+    "celebmhq":celebMHQDataset,
+    "adult":AdultDataset,
+#    "coco":COCODataset,
 }
 
 def name2loader(args):
-    
+    print("name2loader", args)    
     dataset_name = args.dataset.split("_")[0].lower()
-
+    print ("dataset_name:", dataset_name)
     if  len(args.dataset.split("_")) > 1:
         args.protected_task = args.dataset.split("_")[1]
 

@@ -35,8 +35,22 @@ class BaseDataset(torch.utils.data.Dataset):
         self.load_data()
 
         self.regression_init()
-        
-        self.X = np.array(self.X)
+        cf = currentframe()
+        filename = getframeinfo(cf).filename
+        logging.info(str(filename) + ":" +str(cf.f_lineno))
+        logging.debug (type(self.X), self.X[0]) 
+        logging.debug (len(self.X))
+        logging.debug (self.X[0].shape, type(self.X[0]))
+        if type(self.X[0]) == torch.Tensor:
+           for i in range(len(self.X)):
+                self.X[i] = self.X[i].numpy()
+           
+        try:
+             self.X = np.array(self.X)
+        except Exception as d:
+             print (d)
+             raise (d)
+
         if len(self.X.shape) == 3:
             self.X = np.concatenate(list(self.X), axis=0)
         self.y = np.array(self.y).astype(int)

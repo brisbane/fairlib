@@ -46,17 +46,33 @@ class COMPAS:
 
         file_path = os.path.join(self.dest_folder,dataset_file_name)
         temp_df = pd.read_csv(file_path)
+        #Notes : preprocessing of data
+        temp_df2 = temp_df[( 
+               (temp_df['days_b_screening_arrest'] <= 30 ) &  (temp_df['days_b_screening_arrest'] >= -30)  &
+               (temp_df['days_b_screening_arrest'].notna() ) &
+               (temp_df['c_charge_degree']  != "O") &
+               ( temp_df['score_text'] != 'N/A' ) )
+               ]
 
         # Columns of interest
-        columns = ['juv_fel_count', 'juv_misd_count', 'juv_other_count', 'priors_count',
-                        'age', 
-                        'c_charge_degree', 
-                        'c_charge_desc',
-                        'age_cat',
-                        'sex', 'race',  'is_recid']
-
+         columns = [
+           'juv_fel_count',
+           'juv_misd_count',
+           'juv_other_count',
+           'priors_count',
+           'days_b_screening_arrest',
+           'c_charge_degree',
+           'c_charge_desc',
+           'is_recid',
+           'v_decile_score',
+           'sex',
+           'age_cat',
+           'race',
+           
+           'age'
+        ]
         # Drop duplicates
-        temp_df = temp_df[['id']+columns].drop_duplicates()
+        temp_df2 = temp_df2[['id']+columns].drop_duplicates()
         df = temp_df[columns].copy()
 
         # Convert columns of type ``object`` to ``category`` 
@@ -66,8 +82,8 @@ class COMPAS:
                 ], axis=1).reindex(df.columns, axis=1)
 
         # Binarize target_variable
-        df[target_variable] = df.apply(lambda x: target_value if x[target_variable]==1.0 else 'No', axis=1).astype('category')
-
+        df[target_variable] = df.apply(lambda x: 1 if x[target_variable]==1 else 0, axis=1).astype(int)
+        
         # Process protected-column values
         race_dict = {'African-American':'Black','Caucasian':'White'}
         df['race'] = df.apply(lambda x: race_dict[x['race']] if x['race'] in race_dict.keys() else 'Other', axis=1).astype('category')
@@ -87,16 +103,16 @@ class COMPAS:
         temp_dict = train_df.describe().to_dict()
         mean_std_dict = {}
         for key, value in temp_dict.items():
-            mean_std_dict[key] = [value['mean'],value['std']]
+          mean_std_dict[key] = [value['mean'],value['std']]
+        print(mean_std_dict)
+        train_df = preprocessing(train_df, mean_std_dict, vocab_dict)
+        dev_df =  preprocessing(dev_df, mean_std_dict, vocab_dict)
+        test_df = preprocessing(test_df, mean_std_dict, vocab_dict)
+        train_df.to_pickle(os.path.join(dataset_base_dir, "train.pkl"))
+        dev_df.to_pickle(os.path.join(dataset_base_dir, "dev.pkl"))
+        test_df.to_pickle(os.path.join(dataset_base_dir, "test.pkl"))
 
-        train_df=preprocessing(train_df, mean_std_dict, vocab_dict)
-        dev_df=preprocessing(dev_df, mean_std_dict, vocab_dict)
-        test_df=preprocessing(test_df, mean_std_dict, vocab_dict)
 
-        train_df.to_pickle(os.path.join(self.dest_folder, "COMPAS_train.pkl"))
-        dev_df.to_pickle(os.path.join(self.dest_folder, "COMPAS_dev.pkl"))
-        test_df.to_pickle(os.path.join(self.dest_folder, "COMPAS_test.pkl"))
-        
 
     def prepare_data(self):
         self.download_files()

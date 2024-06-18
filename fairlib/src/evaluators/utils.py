@@ -23,7 +23,7 @@ def save_checkpoint(
     epoch, epochs_since_improvement, model, loss, dev_evaluations,
     valid_confusion_matrices, test_confusion_matrices,
     test_evaluations, is_best, checkpoint_dir, prefix = "checkpoint",
-    dev_predictions=None, test_predictions=None):
+    dev_predictions=None, test_predictions=None, keep_intermediate_checkpoints=True):
     """save check points to a specified file.
 
     Args:

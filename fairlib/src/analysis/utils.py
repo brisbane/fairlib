@@ -13,7 +13,7 @@ import math
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
+import logging 
 def mkdirs(paths):
     """make a set of new directories
 
@@ -97,8 +97,52 @@ def DTO(fairness_metric, performacne_metric, utopia_fairness = None, utopia_perf
     # Calculate Euclidean distance
     return l2norm(normalized_metric, np.ones_like(normalized_metric))
 
+
+""" Check if filname was created for the hyperparameters in dict
+   Args:
+          filename (str|Path): filename to check
+          hyper_filter: Select only certain models confirming ot these hyperparameters {[!]key:value}
+   Returns: 
+       bool: If filter matches
+"""
+def hyper_match(filename,hyper_filter,opts, default=False):
+    if  hyper_filter is None :
+        return True
+#    print (hyper_filter)
+    result_overall=default
+    for key2, value2 in hyper_filter.items():
+        thiskey=key2
+        invert=False
+        this_result=False
+        if key2.startswith("!"):
+                invert=True
+                thiskey=key2[1:]
+        for key1,value1 in opts.items():
+
+            if key1 == thiskey:
+                try: 
+                    if type(value2)(value1)==value2:
+                        if invert:
+                            return False
+                        result_overall=True
+                    else: 
+                        if invert: 
+                            result_overall=True
+                        else:
+                            return False
+                except:
+                    raise
+                    return 2
+
+        return result_overall 
+
+
+   
 # find folders for each run
-def get_dir(results_dir, project_dir, checkpoint_dir, checkpoint_name, model_id):
+####added an automatic override for any directories that have already been cleaned
+
+def get_dir(results_dir, project_dir, checkpoint_dir, checkpoint_name, model_id, hyper_filter=None):
+    #print (results_dir, project_dir, checkpoint_dir, checkpoint_name, model_id, hyper_filter)
     """retrive logs for experiments
 
     Args:
@@ -107,7 +151,7 @@ def get_dir(results_dir, project_dir, checkpoint_dir, checkpoint_name, model_id)
         checkpoint_dir (str): dir to checkpoints, `models` by default.
         checkpoint_name (str):  checkpoint_epoch{num_epoch}.ptr.gz
         model_id (str): read all experiment start with the same model_id. E.g., "Adv" when tuning hyperparameters for standard adversarial
-
+        hyper_filter: Select only certain models confirming ot these hyperparameters {key:value}
     Returns:
         list: a list of dictionaries, where each dict contains the information for a experiment.
     """
@@ -129,11 +173,19 @@ def get_dir(results_dir, project_dir, checkpoint_dir, checkpoint_name, model_id)
                     _opt = yaml.load(f, Loader=SafeLoader)
                 
                 _checkpoints_dirs = []
+                hm= hyper_match(_dirs, hyper_filter, _opt) 
+                if not hm : continue
                 for root2, dirs2, files2 in os.walk(_dirs / checkpoint_dir):
                     for file2 in files2:
                         if file2.startswith(checkpoint_name):
-                            _dirs2 = os.path.join(root2, file2)
-                            _checkpoints_dirs.append(_dirs2)
+
+#                              print ( root2," matches")
+                              _dirs2 = os.path.join(root2, file2)
+                              _checkpoints_dirs.append(_dirs2)
+#                            else:
+#                              print ( root2," no matches")
+#                        else:
+#                             print ("checkpoint name fails to match:", checkpoint_name, file2)
                 exps.append(
                     {
                         "opt":_opt,
@@ -143,13 +195,14 @@ def get_dir(results_dir, project_dir, checkpoint_dir, checkpoint_name, model_id)
                 )
     return exps
 
-def get_model_scores(exp, GAP_metric, Performance_metric, keep_original_metrics = False):
+def get_model_scores(exp, GAP_metric, Performance_metric, keep_original_metrics = False, author_orig=False):
     """given the log path for a exp, read log and return the dev&test performacne, fairness, and DTO
 
     Args:
         exp (str): get_dir output, includeing the options and path to checkpoints
         GAP_metric (str): the target GAP metric name
         Performance_metric (str): the target performance metric name, e.g., F1, Acc.
+        author_orig: Use orginal DTO calculation for this function
 
     Returns:
         pd.DataFrame: a pandas df including dev and test scores for each epoch
@@ -179,9 +232,16 @@ def get_model_scores(exp, GAP_metric, Performance_metric, keep_original_metrics 
                 epoch_scores_test[_test_keys] = (epoch_scores_test.get(_test_keys,[]) + [epoch_result["test_evaluations"][_test_keys]])
 
     # Calculate the DTO for dev and test 
-    dev_DTO = DTO(fairness_metric=epoch_scores_dev["fairness"], performacne_metric=epoch_scores_dev["performance"])
-    test_DTO = DTO(fairness_metric=epoch_scores_test["fairness"], performacne_metric=epoch_scores_test["performance"])
-    
+    if author_orig:
+       dev_DTO = DTO(fairness_metric=epoch_scores_dev["fairness"], performacne_metric=epoch_scores_dev["performance"])
+       test_DTO = DTO(fairness_metric=epoch_scores_test["fairness"], performacne_metric=epoch_scores_test["performance"])
+    else:
+       #logging.warning("Using divergent DTO calculation")
+       dev_DTO = DTO(fairness_metric=epoch_scores_dev["fairness"], performacne_metric=epoch_scores_dev["performance"],
+               utopia_fairness=1.0, utopia_performance=1.0)
+       test_DTO = DTO(fairness_metric=epoch_scores_test["fairness"], performacne_metric=epoch_scores_test["performance"],
+               utopia_fairness=1.0, utopia_performance=1.0)
+
     epoch_results_dict = {
             "epoch":epoch_id,
             "dev_DTO":dev_DTO,
@@ -199,6 +259,7 @@ def get_model_scores(exp, GAP_metric, Performance_metric, keep_original_metrics 
 
     return epoch_scores
 
+# Gets all scores from each hyperparameter set
 def retrive_all_exp_results(exp,GAP_metric_name, Performance_metric_name,index_column_names, keep_original_metrics = False):
     """retrive experimental results according to the input list of experiments.
 
@@ -229,6 +290,7 @@ def retrive_all_exp_results(exp,GAP_metric_name, Performance_metric_name,index_c
 
     return _exp_results
 
+# Gets only the best epch from a hyperparameter set
 def retrive_exp_results(
     exp,GAP_metric_name, Performance_metric_name,
     selection_criterion,index_column_names, keep_original_metrics = False):
@@ -254,8 +316,11 @@ def retrive_exp_results(
         )
     if selection_criterion == "DTO":
         selected_epoch_id = np.argmin(epoch_scores["dev_{}".format(selection_criterion)])
+    elif selection_criterion == "performance":
+        selected_epoch_id = np.argmax(epoch_scores["dev_{}".format(selection_criterion.lower())])
     else:
-        selected_epoch_id = np.argmax(epoch_scores["dev_{}".format(selection_criterion)])
+        selected_epoch_id = np.argmax(epoch_scores["dev_{}".format(selection_criterion.lower())])
+    #print ("selection_criterion:", selection_criterion)
     selected_epoch_scores = epoch_scores.iloc[selected_epoch_id]
 
     _exp_opt = exp["opt"]
@@ -270,7 +335,9 @@ def retrive_exp_results(
         _exp_results[key] = selected_epoch_scores[key]
     
     _exp_results["opt_dir"] = exp["opt_dir"]
-    _exp_results["epoch"] = selected_epoch_id
+    #SB bug fix to use epoch not id of the index of it
+    #_exp_results["epoch"] = selected_epoch_id
+    _exp_results["epoch"] = selected_epoch_scores["epoch"]
 
     return _exp_results
 

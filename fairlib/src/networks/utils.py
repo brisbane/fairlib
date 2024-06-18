@@ -2,19 +2,25 @@ import torch.nn as nn
 import torch
 import logging
 from torch.optim import Adam
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import StepLR
 import time
 from pathlib import Path
 from ..evaluators import print_network, present_evaluation_scores, validation_is_best
 import pandas as pd
 from .knn_labels import KNN_labels
 
+# train the main model with adv loss
 def train_epoch(model, iterator, args, epoch):
 
     epoch_loss = 0
     model.train()
 
     optimizer = model.optimizer
+    scheduler = model.scheduler
     criterion = model.criterion
+    #save disk
+    keep_intermediate_checkpoints = args.keep_intermediate_checkpoints
 
     data_t0 = time.time()
     data_t, t = 0, 0
@@ -25,8 +31,12 @@ def train_epoch(model, iterator, args, epoch):
         tags = batch[1].long().squeeze()
         p_tags = batch[2].float().squeeze()
 
-        if args.encoder_architecture != "Fixed":
-            # Modify the inputs for models like BERT
+        text = text.to(args.device)
+        tags = tags.to(args.device)
+        p_tags = p_tags.to(args.device)
+
+        if args.encoder_architecture == "BERT":
+            # Modify the inputs for BERT models
             mask = torch.stack(batch["attention_mask"]).float().squeeze().T
             mask = mask.to(args.device)
             text = (text, mask)
@@ -141,6 +151,9 @@ def train_epoch(model, iterator, args, epoch):
 
         optimizer.step()
         epoch_loss += loss.item()
+        #sb moved to end of all batches on 20 april
+#        if scheduler:
+#            scheduler.step(epoch_loss)
         t += (time.time() - t0)
         data_t0 = time.time()
 
@@ -174,7 +187,8 @@ def train_epoch(model, iterator, args, epoch):
                     valid_preds, valid_labels, valid_private_labels,
                     test_preds, test_labels, test_private_labels,
                     epoch=epoch+(it / len(iterator)), epochs_since_improvement=None, model=model,
-                    epoch_valid_loss=None, is_best=is_best
+                    epoch_valid_loss=None, is_best=is_best,
+                    keep_intermediate_checkpoints= keep_intermediate_checkpoints,
                     )
                 
                 model.train()
@@ -207,8 +221,8 @@ def eval_epoch(model, iterator, args):
         tags = tags.to(device).long()
         p_tags = p_tags.to(device).float()
 
-        if args.encoder_architecture != "Fixed":
-            # Modify the inputs for models like BERT
+        if args.encoder_architecture == "BERT":
+            # Modify the inputs for BERT models
             mask = torch.stack(batch["attention_mask"]).float().squeeze().T
             mask = mask.to(args.device)
             text = (text, mask)
@@ -265,7 +279,24 @@ class BaseModel(nn.Module):
             lr=self.learning_rate,
             weight_decay = self.args.weight_decay,
             )
+        self.scheduler=None
+        try:
+            if  self.args.lr_scheduler:
+               if self.args.lr_scheduler == "StepLR":
+                   self.scheduler = StepLR(self.optimizer, step_size=10)
+#sean changed
 
+               elif self.args.lr_scheduler == "ReduceLROnPlateau":
+
+                   self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.args.weight_decay,patience=2)
+               elif self.args.lr_scheduler == "default":
+                   pass
+               else: 
+                   print (f"scheduler type {self.args.scheduler} Unknown")
+
+        except:
+            raise("")
+        #self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=0.50,patience=2)
         if self.args.BT and self.args.BT == "Reweighting":
             reduction = "none"
         else:
@@ -312,7 +343,8 @@ class BaseModel(nn.Module):
                     p.grad.zero_()
     
     def train_self(self, **opt_pairs):
-
+        for param in self.parameters():
+            print("params, type:" , type(param), " size:",  param.size())
         # Overwrite the arguments
         dataloader_opt_keys = ["train_generator", "dev_generator", "test_generator"]
         _generators = {k:opt_pairs.get(k, None) for k in dataloader_opt_keys}
@@ -330,6 +362,7 @@ class BaseModel(nn.Module):
             logging.info("Reinitialized DyBT sampler for dataloader")
 
         epochs_since_improvement = 0
+        keep_intermediate_checkpoints = self.args.keep_intermediate_checkpoints
         # best_valid_loss = 1e+5
 
         for epoch in range(self.args.opt.epochs):
@@ -355,6 +388,11 @@ class BaseModel(nn.Module):
             # Update discriminator if needed
             if self.args.adv_debiasing and self.args.adv_update_frequency == "Epoch":
                 self.args.discriminator.train_self(self)
+
+            if self.scheduler:
+                self.scheduler.step(epoch_valid_loss)
+        
+
 
             # Check if there was an improvement
             # is_best = epoch_valid_loss < best_valid_loss
@@ -385,6 +423,7 @@ class BaseModel(nn.Module):
                     test_preds, test_labels, test_private_labels,
                     epoch, epochs_since_improvement, self, epoch_valid_loss,
                     is_best, 
+                    keep_intermediate_checkpoints = keep_intermediate_checkpoints
                     )
 
     def extract_hidden_representations(self, split):

@@ -161,7 +161,7 @@ def gap_eval_scores(y_pred, y_true, protected_attribute, metrics=["TPR","FPR","P
     Args:
         y_pred (np.array): model predictions.
         y_true (np.array): target labels.
-        protected_attribute (np.array): protected labels.
+        protected_attribute (np.array): protected labels. Should be length of y so that we can select which y we care about for the group
         metrics (list, optional): a list of metric names that will be considered for fairness evaluation. Defaults to ["TPR","FPR","PPR"].
 
     Returns:

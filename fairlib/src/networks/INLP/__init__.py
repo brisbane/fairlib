@@ -91,6 +91,7 @@ def get_INLP_trade_offs(model, args):
             epoch = iteration, epochs_since_improvement = None, 
             model = model, epoch_valid_loss = None,
             is_best = False, prefix = "INLP_checkpoint",
+            keep_intermediate_checkpoints = args.keep_intermediate_checkpoints
             )
 
     return None

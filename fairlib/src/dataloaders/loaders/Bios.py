@@ -17,7 +17,7 @@ class BiosDataset(BaseDataset):
             selected_rows = (data["economy_label"] != "Unknown")
             data = data[selected_rows]
 
-        if self.args.encoder_architecture == "Fixed":
+        if self.args.encoder_architecture in [  "Fixed", "DecreasingNN" ]:
             self.X = list(data[self.embedding_type])
         elif self.args.encoder_architecture == "BERT":
             _input_ids, _token_type_ids, _attention_mask = self.args.text_encoder.encoder(list(data[self.text_type]))

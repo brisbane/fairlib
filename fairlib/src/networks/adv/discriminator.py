@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from .utils import SubDiscriminator
 from .customized_loss import DiffLoss
+from .customized_loss import CorrLoss
 
 from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
@@ -235,8 +236,19 @@ class Discriminator():
 
         # Init difference loss for the diverse Adv
         if self.args.adv_num_subDiscriminator>1 and self.args.adv_diverse_lambda>0:
-            self.diff_loss = DiffLoss()
-
+            try:
+                if self.args.adv_corr_loss :
+                    self.diff_loss = CorrLoss()
+                    print ("corrloss, no exception")
+                else:
+                    self.diff_loss = DiffLoss()
+                    print ("diffloss, no exception")
+            except:
+                    self.diff_loss = DiffLoss()
+                    print ("diffloss, exception")
+        else:
+            print ("nodiffloss")
+        print ("TODO should this be cross entropy loss actually?")
         self.adv_loss_criterion = torch.nn.CrossEntropyLoss()
     
     

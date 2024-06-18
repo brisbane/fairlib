@@ -99,6 +99,8 @@ def get_debiasing_projection(classifier_class, cls_params: Dict, num_classifiers
     Ws = []
 
     pbar = tqdm(range(num_classifiers))
+    best_acc=0
+    best_iter=-1
     for i in pbar:
 
         clf = classifier.SKlearnClassifier(classifier_class(**cls_params))
@@ -116,8 +118,12 @@ def get_debiasing_projection(classifier_class, cls_params: Dict, num_classifiers
             relevant_idx_dev = np.ones(X_dev_cp.shape[0], dtype=bool)
 
         acc = clf.train_network((X_train_cp * dropout_mask)[relevant_idx_train], Y_train[relevant_idx_train], X_dev_cp[relevant_idx_dev], Y_dev[relevant_idx_dev])
+        #These are the scores on the development set
         pbar.set_description("iteration: {}, accuracy: {}".format(i, acc))
         if acc < min_accuracy: continue
+        if acc > best_acc:
+            best_acc=acc
+            best_iter=i
 
         W = clf.get_weights()
         Ws.append(W)

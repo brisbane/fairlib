@@ -26,7 +26,7 @@ class FCL_BiosDataset(BaseDataset):
             selected_rows = (data["economy_label"] != "Unknown")
             data = data[selected_rows]
 
-        if self.args.encoder_architecture == "Fixed":
+        if self.args.encoder_architecture in [  "Fixed", "DecreasingNN" ]:
             self.X = list(data[self.embedding_type])
         elif self.args.encoder_architecture == "BERT":
             self.X = self.args.text_encoder.encoder(list(data[self.text_type]))

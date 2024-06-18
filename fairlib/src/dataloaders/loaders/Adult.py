@@ -8,7 +8,13 @@ class AdultDataset(BaseDataset):
 
     def load_data(self):
 
-        self.data_dir = os.path.join(self.args.data_dir, "Adult_{}.pkl".format(self.split))
+        #self.data_dir = os.path.join(self.args.data_dir, "Adult_{}.pkl".format(self.split))
+        print ("self.split:", self.split)
+        if self.args.seed != 1:
+            print (f"there is a seed {self.args.seed}")
+            self.data_dir = os.path.join(self.args.data_dir,self.args.seed, "Adult_{}.pkl".format(self.split))
+        else:
+            self.data_dir = os.path.join(self.args.data_dir, "Adult_{}.pkl".format(self.split))
 
         data = pd.read_pickle(self.data_dir)
 

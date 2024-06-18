@@ -12,7 +12,8 @@ import numpy as np
 
 def retrive_results(
     dataset,
-    log_dir="results"
+    log_dir="results",
+    quiet=True
 ):
     """retrive loaded results of a dataset from files
 
@@ -25,11 +26,14 @@ def retrive_results(
     """
     log_dir = Path(log_dir)
     results = {}
-    for root, dirs, files in os.walk(log_dir):
+   
+    for root, dirs, files in os.walk(log_dir, followlinks=True):
+
         for file in files:
             if file.startswith(dataset):
                 pre_len = len(dataset)+len(str(log_dir))+2
                 file_path = os.path.join(root, file)
+                if not quiet: print (str(os.path.join(root, file)), pre_len)
                 if file.endswith("_df.pkl"):
                     mehtod = str(os.path.join(root, file))[pre_len:-7]
                 else:
@@ -40,6 +44,7 @@ def retrive_results(
                     import pickle5
                     with open(file_path, "rb") as fh:
                         results[mehtod] = pickle5.load(fh)
+                if not quiet: print (mehtod)
     return results
 
 

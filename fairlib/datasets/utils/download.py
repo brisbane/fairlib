@@ -8,7 +8,11 @@ def download(url: str, dest_folder: str, chunk_size: int = 10*1024*1024):
 
     filename = url.split('/')[-1].replace(" ", "_")  # be careful with file names
     file_path = os.path.join(dest_folder, filename)
-
+    if os.path.exists( os.path.abspath(file_path) ):
+         print ("File ", os.path.abspath(file_path), " already exists")
+         return 0
+    else:
+        print("getting file ", os.path.abspath(file_path), url)
     r = requests.get(url, stream=True)
     try:
         total_length = int(r.headers.get('content-length'))
@@ -25,3 +29,5 @@ def download(url: str, dest_folder: str, chunk_size: int = 10*1024*1024):
                     os.fsync(f.fileno())
     else:  # HTTP status code 4XX/5XX
         print("Download failed: status code {}\n{}".format(r.status_code, r.text))
+        return 1
+    return os.path.abspath(file_path)

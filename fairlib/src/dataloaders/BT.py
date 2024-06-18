@@ -92,7 +92,11 @@ def get_sampled_indices(BTObj, y, protected_label, method = "Downsampling"):
 
     for idx, group_label in enumerate(group_labels):
         group_idx[group_label] = group_idx.get(group_label, []) + [idx]
-
+        #print ( group_idx.get(group_label, []) , [idx], "serio", group_label)
+        if group_idx[group_label] == None:
+            print ("none found", group_label, idx)
+            sys.exit(1)
+    
     selected_index = []
 
     if BTObj in ["joint", "y", "g"]:

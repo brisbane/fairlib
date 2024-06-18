@@ -10,19 +10,26 @@ from .utils import BaseModel
 from .augmentation_layer import Augmentation_layer
 
 from transformers import BertModel
-
+from torchvision.models import resnet18, ResNet18_Weights
 class MLP(BaseModel):
     def __init__(self, args):
         super(MLP, self).__init__()
         self.args = args
         
         assert args.n_hidden >= 0, "n_hidden must be nonnegative"
-        
-        self.output_layer = nn.Linear(
+
+        if  not args.softmax: 
+          self.output_layer = nn.Linear(
             args.emb_size if args.n_hidden == 0 else args.hidden_size, 
             args.num_classes if not args.regression else 1,
             )
-
+        else:
+          self.output_layer = nn.Sequential ( nn.Linear(
+            args.emb_size if args.n_hidden == 0 else args.hidden_size,
+            args.num_classes if not args.regression else 1,
+            ), 
+            nn.Softmax(dim=0))
+        
         # Init batch norm, dropout, and activation function
         self.init_hyperparameters()
 
@@ -141,6 +148,48 @@ class MLP(BaseModel):
                 return parameters
             else:
                 raise "not implemented yet"
+class MLP_decreasing (MLP):
+    def __init__(self, args):
+        print ("init DecreasingNN")
+        super(MLP_decreasing, self).__init__(args)
+        self.args = args
+    def init_hidden_layers(self):
+        args = self.args
+        
+        if args.n_hidden == 0:
+            return nn.ModuleList()
+        else:
+            hidden_layers = nn.ModuleList()
+            hidden_size=args.hidden_size
+            all_hidden_layers=[]
+
+            count=0
+            for _ in  range(args.n_hidden-1):
+               print ("loop :", count, hidden_size*2)
+               count+=1
+               all_hidden_layers.append(nn.Linear(in_features=int(hidden_size*2), out_features=int(hidden_size) ))
+               hidden_size=int(hidden_size*2)
+            self.hidden_size=hidden_size
+            count=0
+            all_hidden_layers.append(nn.Linear(args.emb_size, hidden_size))
+
+            for _hidden_layer in reversed(all_hidden_layers):
+                count=count+1
+                hidden_layers.append(_hidden_layer)
+#                help(_hidden_layer)
+                hsize=_hidden_layer.out_features
+                if self.dropout is not None:
+                    hidden_layers.append(self.dropout)
+                if self.BN is not None:
+                    hidden_layers.append(
+                       nn.BatchNorm1d(hsize)
+                       )
+
+                if self.AF is not None:
+                    hidden_layers.append(self.AF)
+            print ("nhidden is" , count)
+            return hidden_layers
+
 
 class BERTClassifier(BaseModel):
     model_name = 'bert-base-cased'
@@ -200,6 +249,42 @@ class BERTClassifier(BaseModel):
         params = sum([np.prod(p.size()) for p in model_parameters])
         return params
 
+
+class ResNet(BaseModel):
+
+    def __init__(self, args):
+        super(ResNet, self).__init__()
+        self.args = args
+
+        self.conv1 = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+        model_ft = self.conv1
+        ct = 0
+        for child in model_ft.children():
+            ct += 1
+        #    if ct < 7:
+            for param in child.parameters():
+                param.requires_grad = False
+        #strip ouut the final layer and replace with a fuly connected trinable layer
+        num_final_in = self.conv1.fc.in_features
+        self.conv1.fc = nn.Linear(num_final_in, args.emb_size)
+        self.classifier = MLP(args)
+
+        self.init_for_training()
+
+    def forward(self, input_data, group_label = None):
+        x = input_data
+        x = F.relu(self.conv1(x))
+        #flatten? batch size
+        x = x.view(-1, 1000)
+
+        return self.classifier(x, group_label)
+
+    def hidden(self, input_data, group_label = None):
+        x = input_data
+        x = F.relu(self.conv1(x))
+        x = x.view(-1, 1000)
+
+        return self.classifier.hidden(x, group_label)
 class ConvNet(BaseModel):
 
     def __init__(self, args):

@@ -6,6 +6,7 @@ def present_evaluation_scores(
     test_preds, test_labels, test_private_labels,
     epoch, epochs_since_improvement, model, epoch_valid_loss,
     is_best, prefix = "checkpoint",
+    keep_intermediate_checkpoints=False,
     ):
     """Conduct evaluation, present results, and save evaluation results to file.
 
@@ -51,7 +52,9 @@ def present_evaluation_scores(
         test_confusion_matrices = test_confusion_matrices,
         is_best = is_best,
         checkpoint_dir = model.args.model_dir,
-        prefix = prefix,)
+        prefix = prefix,
+        keep_intermediate_checkpoints =         keep_intermediate_checkpoints
+        )
 
     validation_results = ["{}: {:2.2f}\t".format(k, 100.*valid_scores[k]) for k in valid_scores.keys()]
     logging.info(('Validation {}').format("".join(validation_results)))
@@ -79,6 +82,7 @@ def validation_is_best(
 
     if selection_criterion == "DTO":
         valid_dto_score = ((1-valid_scores[performance_metric])**2 + valid_scores[fairness_metric]**2)**0.5
+        print ("valid DTO:", valid_dto_score)
         if valid_dto_score < model.best_valid_loss:
             model.best_valid_loss = valid_dto_score
             is_best = True

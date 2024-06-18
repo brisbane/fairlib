@@ -25,7 +25,8 @@ class State(object):
         def __init__(self, requires_unique=True):
             self.__requires_unique = requires_unique
             self.__set_value = {}
-
+        def __str__(self):
+            return vars(self)
         def requires_unique(self):
             return self.__requires_unique
 
@@ -49,7 +50,8 @@ class State(object):
         self.extras = {}
         self.__inited = True
         self._output_flag = True
-
+    def __str__(self):
+        return ":\n".join([str(self.opt), str(self.extras)])
     def __setattr__(self, k, v):
         if not self.__inited:
             return super(State, self).__setattr__(k, v)
@@ -168,7 +170,7 @@ class BaseOptions(object):
         parser.add_argument('--exp_id', type=str, default="test",
                             help='experiment id')
         parser.add_argument('--encoder_architecture', type=str, default="Fixed",
-                            help='Fixed | BERT | DeepMoji')
+                            help='Fixed | BERT | DeepMoji | DecreasingNN')
         parser.add_argument('--batch_size', type=pos_int, default=1024,
                             help='input batch size for training (default: 1024)')
         parser.add_argument('--test_batch_size', type=pos_int, default=1024,
@@ -191,6 +193,8 @@ class BaseOptions(object):
                             help='if saving model parameters')
         parser.add_argument('--checkpoint_interval', type=int, default=1, metavar='N',
                             help='checkpoint interval (epoch)')
+        parser.add_argument('--keep_intermediate_checkpoints', default=False, type=bool,
+                            help='checkpointkeep those that are not best)')
         parser.add_argument('--dataset', type=str, default='Moji',
                             help='dataset: Moji | Bios_gender | Bios_economy | Bios_both')
         parser.add_argument('--data_dir', type=str, default=None,
@@ -237,6 +241,12 @@ class BaseOptions(object):
                             help='apply 1d batch norm to the model')
         parser.add_argument('--classification_head_update_frequency',  type=pos_int, default=1,
                             help='the update frequency of the main model classification head (every N batches)')
+        parser.add_argument('--softmax', action='store_true', default=False , 
+                            help='Use softmax on output layer')
+        parser.add_argument('--decreasing_output_size', action='store_true', default=False , 
+                            help='Decrease outpul layer size for MLP down to last layer with output size equal to hidden_size in increments of factor 2')
+        parser.add_argument('--lr_scheduler', type=str, default=None , 
+                            help='StepLR |  ReduceLROnPlateau | default (=none)')
 
         # Arguments for balanced training
         parser.add_argument('--BT', type=str, default=None, help='Reweighting | Resampling | Downsampling')
@@ -256,6 +266,8 @@ class BaseOptions(object):
 
         # Arguments for adversarial debiasing
         parser.add_argument('--adv_debiasing', action='store_true', default=False, help='Adv debiasing?')
+        #Adversarial correlation loss
+        parser.add_argument('--adv_corr_loss', action='store_true', default=False, help='Adv debiasing - use pearson corrleation as loss')
         # The following arguments will only be used if adv_debiasing is set to True
         parser.add_argument('--adv_update_frequency', type=str, default="Batch", help='Epoch | Batch')
         parser.add_argument('--adv_checkpoint_interval', type=int, default=1, metavar='N',
@@ -467,7 +479,10 @@ class BaseOptions(object):
                     # ignore unknown ctors
                     yaml.add_multi_constructor('', lambda loader, suffix, node: None)
                     old_yaml = yaml.full_load(f)  # this is a dict
-                old_yaml_time = old_yaml.get('start_time', 'unknown_time')
+                if old_yaml:    
+                   old_yaml_time = old_yaml.get('start_time', 'unknown_time')
+                else:
+                     old_yaml_time = 'unknown_time'
                 for c in ':-':
                     old_yaml_time = old_yaml_time.replace(c, '_')
                 old_yaml_time = old_yaml_time.replace(' ', '__')
@@ -553,8 +568,10 @@ class BaseOptions(object):
                     state.opt.discriminator = networks.adv.Discriminator(state)
                 logging.info('Discriminator built!')
                 # adv.utils.print_network(state.opt.discriminator.subdiscriminators[0])
-
-                state.opt.diff_loss = adv.customized_loss.DiffLoss()
+                if state.adv_corr_loss:
+                    state.opt.diff_loss = adv.customized_loss.CorrLoss()
+                else:
+                    state.opt.diff_loss = adv.customized_loss.DiffLoss()
 
             # Init the fair supervised contrastive loss
             if state.FCL:

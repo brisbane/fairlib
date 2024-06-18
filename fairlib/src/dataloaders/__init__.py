@@ -20,7 +20,7 @@ def get_dataloaders(args):
     """
     task_dataloader = name2loader(args)
     
-    if args.encoder_architecture in ["Fixed", "MNIST"]:
+    if args.encoder_architecture in ["Fixed", "MNIST", "ResNet", "DecreasingNN"]:
         pass
     elif args.encoder_architecture == "BERT":
         # Init the encoder form text to idx.
